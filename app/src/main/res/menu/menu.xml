@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/action_settings"
+        android:icon="@drawable/ic_settings_24dp"
+        android:title="@string/settings"
+        app:showAsAction="always">
+        <menu>
+
+            <item
+                android:id="@+id/action_reporting"
+                android:title="@string/crash_reporting" />
+            <item
+                android:id="@+id/action_about"
+                android:title="@string/about" />
+        </menu>
+    </item>
+
+    <item
+        android:id="@+id/action_peek"
+        android:icon="@drawable/ic_image_24dp"
+        android:title="@string/peek"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_hint"
+        android:title="@string/hint"
+        app:showAsAction="always" />
+    <item
+        android:id="@+id/action_new"
+        android:icon="@drawable/ic_fiber_new_black_24dp"
+        android:title="@string/new_picture"
+        app:showAsAction="always" />
+</menu>
