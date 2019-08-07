@@ -71,7 +71,8 @@ class MainActivity : AppCompatActivity() {
             PuzzleViewModel(
                 ImageRepositoryImpl(context),
                 PuzzleStateLoaderImpl(context),
-                GDPRCheckerImpl(context)
+                GDPRCheckerImpl(context),
+                SystemAbstractionsImpl(context)
             )
         }
 
@@ -146,8 +147,8 @@ class MainActivity : AppCompatActivity() {
                                 .setViewInCard(ImageView(this@MainActivity).apply {
                                     scaleType = ImageView.ScaleType.FIT_CENTER
                                     adjustViewBounds = true
-                                    val (w, h) = screenSize().let {
-                                        it.first - dp(56) to it.second - dp(56)
+                                    val (w, h) = screenSize.let { size ->
+                                        size.first - dp(56) to size.second - dp(56)
                                     }
                                     maxWidth = w
                                     maxHeight = h
@@ -184,7 +185,22 @@ class MainActivity : AppCompatActivity() {
                         true
                     }
                     R.id.action_new -> {
-                        model.intent(PuzzleViewModel.Intents.LoadFromStore.random())
+                        if(model.stateLiveData.value?.isCompleted == false) {
+                            AlertDialog.Builder(this@MainActivity.asThemeContext(R.style.AppDialogTheme))
+                                .setTitle("Warning")
+                                .setMessage("This puzzle is not completed. Load new puzzle image?")
+                                .setPositiveButton("OK") { d, _ ->
+                                    d.dismiss()
+                                    model.intent(PuzzleViewModel.Intents.LoadFromStore.random())
+                                }
+                                .setNegativeButton("Cancel") { d, _ ->
+                                    d.dismiss()
+                                }
+                                .setCancelable(true)
+                                .apply { show() }
+                        }else{
+                            model.intent(PuzzleViewModel.Intents.LoadFromStore.random())
+                        }
                         true
                     }
                 }
@@ -491,12 +507,6 @@ class MainActivity : AppCompatActivity() {
             dialogErrorDetailed?.isShowing == true -> dialogErrorDetailed?.dismiss()
             else -> super.onBackPressed()
         }
-    }
-
-    private fun screenSize(): Pair<Int, Int> {
-        val metrics = DisplayMetrics()
-        windowManager.defaultDisplay.getMetrics(metrics)
-        return metrics.widthPixels to metrics.heightPixels
     }
 
 }

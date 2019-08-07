@@ -13,7 +13,8 @@ import java.util.*
 @FlowPreview
 class PuzzleViewModel(private val repository: ImageRepository,
                       private val puzzleStateLoader: PuzzleStateLoader,
-                      private val gdprChecker: GDPRChecker) : ViewModel() {
+                      private val gdprChecker: GDPRChecker,
+                      private val systemAbstractions: SystemAbstractions) : ViewModel() {
 
 
     companion object {
@@ -37,7 +38,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
                 .asFlow()
                 .startWith(Intents.Init)
                 .flowOn(Dispatchers.Main)
-                .switchMap { intent ->
+                .flatMapMerge { intent ->
                     when (intent) {
                         is Intents.Init -> {
                             Flows.merge(
@@ -56,6 +57,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
                                         repository
                                             .fetch(uri)
                                             .catchDisplayable()
+                                            .map { bitmap -> scaleInitialSource(bitmap) }
                                             .map { bitmap -> Action.StoredState(bitmap, ss) }
                                             .startWith(Action.ImageLoading)
                                     }
@@ -64,6 +66,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
                         is Intents.LoadFromStore -> repository
                             .fetch(intent.uri)
                             .catchDisplayable()
+                            .map { bitmap -> scaleInitialSource(bitmap) }
                             .map { bitmap -> Action.ImageReady(bitmap, intent.uri) }
                             .flowOn(Dispatchers.IO)
                             .startWith(Action.ImageLoading)
@@ -88,7 +91,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
                                 intent.targetIndex
                             )
                         )
-                        is Intents.Cancel -> flowOf(Action.Cancel)
+                        is Intents.Cancel -> repository.cancelFetch().map { Action.Cancel }
                         else -> flowOf(Action.None)
                     }
                 }
@@ -164,6 +167,20 @@ class PuzzleViewModel(private val repository: ImageRepository,
         } else {
             state
         }
+    }
+
+    private fun scaleInitialSource(source: Bitmap): Bitmap {
+        val (w, h) = systemAbstractions.screenSize
+            .run {
+                val padding = systemAbstractions.dp(32)
+                first - padding to  second- padding
+            }
+        return if (w != source.width || h != source.height) {
+            Bitmap.createScaledBitmap(source, w, h, true)
+        } else {
+            source
+        }
+
     }
 
     private fun scaleGrid(original: Bitmap, grid: MutableList<PuzzlePieceInfo>, factor: Float, size: Pair<Int, Int>) {

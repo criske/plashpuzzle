@@ -12,9 +12,11 @@ import android.os.Build
 import android.util.AttributeSet
 import android.view.DragEvent
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.widget.FrameLayout
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
+import androidx.core.view.MotionEventCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
 import kotlinx.android.synthetic.main.puzzle_piece_layout.view.*
@@ -76,18 +78,31 @@ class PuzzlePieceView @JvmOverloads constructor(
 
     var dragEnteredColor: Int = ContextCompat.getColor(context, R.color.colorAccent)
 
-
-
     init {
-        setOnLongClickListener {
-            if (canDrag) {
-                val item = ClipData.Item(tag.toString())
-                val data =
-                    ClipData("PuzzleDrag", arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN), item)
-                val dragShadow = DragShadowBuilder(it)
-                ViewCompat.startDragAndDrop(it, data, dragShadow, Any(), 0)
+//        setOnLongClickListener {
+//            if (canDrag) {
+//                val item = ClipData.Item(tag.toString())
+//                val data =
+//                    ClipData("PuzzleDrag", arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN), item)
+//                val dragShadow = DragShadowBuilder(it)
+//                ViewCompat.startDragAndDrop(it, data, dragShadow, Any(), 0)
+//            }
+//            canDrag
+//        }
+        //
+        setOnTouchListener { v, event ->
+            if(event.action == MotionEvent.ACTION_DOWN){
+                if (canDrag) {
+                    val item = ClipData.Item(tag.toString())
+                    val data =
+                        ClipData("PuzzleDrag", arrayOf(ClipDescription.MIMETYPE_TEXT_PLAIN), item)
+                    val dragShadow = DragShadowBuilder(v)
+                    ViewCompat.startDragAndDrop(v, data, dragShadow, Any(), 0)
+                }
+                canDrag
+            }else{
+                false
             }
-            canDrag
         }
         setOnDragListener { v, event ->
             require(v is PuzzlePieceView)
