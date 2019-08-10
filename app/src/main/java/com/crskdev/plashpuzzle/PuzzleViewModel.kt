@@ -97,8 +97,8 @@ class PuzzleViewModel(private val repository: ImageRepository,
                 }
                 .scan(State()) { state, action ->
                     when (action) {
-                        Action.ImageLoading -> state.copy(isLoading = true)
-                        Action.Cancel -> state.copy(isLoading = false)
+                        Action.ImageLoading -> state.copy(isLoading = true, isSourceChanged = false)
+                        Action.Cancel -> state.copy(isLoading = false, isSourceChanged = false)
                         is Action.ImageReady -> withContext(Dispatchers.Default) {
                             ready(
                                 state,
@@ -107,10 +107,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
                         }
                         is Action.ImageSaved -> saved(state, action)
                         is Action.StoredState -> withContext(Dispatchers.Default) {
-                            restore(
-                                state,
-                                action
-                            )
+                            restore(state, action)
                         }
                         is Action.Scale -> withContext(Dispatchers.Default) { scale(state, action) }
                         is Action.Swap -> withContext(Dispatchers.Default) { swap(state, action) }
@@ -173,7 +170,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
         val (w, h) = systemAbstractions.screenSize
             .run {
                 val padding = systemAbstractions.dp(32)
-                first - padding to  second- padding
+                first - padding to second - padding
             }
         return if (w != source.width || h != source.height) {
             Bitmap.createScaledBitmap(source, w, h, true)
@@ -226,7 +223,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
         }
         if (state.scaleFactor != 0.0f)
             scaleGrid(
-                state.source,
+                bitmap,
                 grid,
                 state.scaleFactor,
                 chunkSize(bitmap)

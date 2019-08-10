@@ -42,33 +42,62 @@ interface ImageRepository {
 @ExperimentalCoroutinesApi
 class ImageRepositoryImpl(private val context: Context) : ImageRepository {
 
-    private val requestManager  = GlideApp.with(context)
+    private val requestManager = GlideApp.with(context)
 
     private var futureFetch: Future<Bitmap>? = null
 
-    private val requestBuilder by lazy{
+    private val requestBuilder by lazy {
         requestManager
             .asBitmap()
-            .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+            .diskCacheStrategy(DiskCacheStrategy.NONE)
             .skipMemoryCache(true)
     }
 
-    override fun fetch(url: String): Flow<Bitmap> = channelFlow{
+    override fun fetch(url: String): Flow<Bitmap> = channelFlow {
         try {
             futureFetch?.cancel(true)
-        }catch (ex: Exception){
+        } catch (ex: Exception) {
             //ignore
         }
         try {
-            futureFetch = synchronized(this@ImageRepositoryImpl){
-                requestBuilder.load(url).submit()
+            val cache = File(context.cacheDir, "plashPuzzleCache")
+            if (!cache.exists()) {
+                assert(cache.mkdir()) { "Cache folder was not created" }
             }
-            offer(futureFetch!!.get())
-        }catch (ex: Exception){
+            val fileName = url
+                .split("?temp=")
+                .takeIf { it.size == 2 }
+                ?.let { "${it[1]}.jpg" }
+                ?: ""
+            if (fileName.isNotEmpty()) {
+                val file = File(cache, fileName)
+                if(file.exists()){
+                    val bitmap: Bitmap? =
+                        BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
+                            inPreferredConfig = Bitmap.Config.ARGB_8888
+                        })
+                    bitmap?.let {
+                        offer(it)
+                    }?: close(PromptableException("Could not load bitmap from file ${file.absolutePath}"))
+                }else {
+                    futureFetch = synchronized(this@ImageRepositoryImpl) {
+                        requestBuilder.load(url).submit()
+                    }
+                    val bitmap = futureFetch!!.get()
+                    //clear cache: it should be one file only
+                    cache.listFiles { f -> f.delete() }
+                    file.outputStream().use {
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)
+                    }
+                    offer(bitmap)
+                }
+            } else {
+                close(PromptableException("Invalid url $url"))
+            }
+        } catch (ex: Exception) {
             close(PromptableException(ex))
         }
     }
-
 
 
 //    override fun fetch(url: String): Flow<Bitmap> = callbackFlow {
@@ -103,7 +132,7 @@ class ImageRepositoryImpl(private val context: Context) : ImageRepository {
 //        }
 //    }
 
-    override fun cancelFetch(): Flow<Unit> = flow{
+    override fun cancelFetch(): Flow<Unit> = flow {
         futureFetch?.cancel(true)
         emit(Unit)
     }
@@ -150,6 +179,7 @@ class ImageRepositoryImpl(private val context: Context) : ImageRepository {
                     channel.close(PromptableException(e))
                     return true
                 }
+
                 override fun onResourceReady(resource: Bitmap?,
                                              model: Any?,
                                              target: Target<Bitmap>?,
