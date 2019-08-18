@@ -10,7 +10,6 @@ import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.method.ScrollingMovementMethod
-import android.util.DisplayMetrics
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -187,13 +186,13 @@ class MainActivity : AppCompatActivity() {
                     R.id.action_new -> {
                         if(model.stateLiveData.value?.isCompleted == false) {
                             AlertDialog.Builder(this@MainActivity.asThemeContext(R.style.AppDialogTheme))
-                                .setTitle("Warning")
-                                .setMessage("This puzzle is not completed. Load new puzzle image?")
+                                .setTitle(context.getString(R.string.warning))
+                                .setMessage(context.getString(R.string.warning_uncompleted_puzzle))
                                 .setPositiveButton("OK") { d, _ ->
                                     d.dismiss()
                                     model.intent(PuzzleViewModel.Intents.LoadFromStore.random())
                                 }
-                                .setNegativeButton("Cancel") { d, _ ->
+                                .setNegativeButton(context.getString(R.string.cancel_lbl)) { d, _ ->
                                     d.dismiss()
                                 }
                                 .setCancelable(true)
@@ -321,6 +320,9 @@ class MainActivity : AppCompatActivity() {
 
         model.eventLiveData.observe(this, Observer { event ->
             when (event) {
+                is PuzzleViewModel.Event.Idle -> {
+                    snackbarError?.dismiss()
+                }
                 is PuzzleViewModel.Event.GDPR -> {
                     val crashlytics = { Fabric.with(this, Crashlytics()) }
                     if (!event.isEnabled) {
@@ -340,7 +342,7 @@ class MainActivity : AppCompatActivity() {
                                     )
                                     d.dismiss()
                                 }
-                                .setNegativeButton(R.string.cancel) { d, _ ->
+                                .setNegativeButton(R.string.cancel_lbl) { d, _ ->
                                     model.intent(
                                         PuzzleViewModel.Intents.GDPRSave(
                                             enable = false,
@@ -372,29 +374,30 @@ class MainActivity : AppCompatActivity() {
                                     .apply {
                                         maxLines = 5
                                         setOnClickListener {
-                                            val text =
-                                                TextView(context.asThemeContext())
-                                                    .apply {
-                                                        height = 300.dp(resources)
-                                                        width = 150.dp(resources)
-                                                        text = error.toString()
-                                                        movementMethod = ScrollingMovementMethod()
-                                                        setOnLongClickListener {
-                                                            dialogErrorDetailed?.dismiss()
-                                                            true
+                                            error.promptStackTrace()?.also { stackTrace ->
+                                                val text =
+                                                    TextView(context.asThemeContext())
+                                                        .apply {
+                                                            height = 300.dp(resources)
+                                                            width = 150.dp(resources)
+                                                            text = stackTrace
+                                                            movementMethod = ScrollingMovementMethod()
+                                                            setOnLongClickListener {
+                                                                dialogErrorDetailed?.dismiss()
+                                                                true
+                                                            }
                                                         }
-                                                    }
-                                            dialogErrorDetailed =
-                                                AlertDialog.Builder(this@MainActivity)
-                                                    .setViewInCard(text)
-                                                    .setCancelable(true)
-                                                    .create()
-                                                    .apply { show() }
-
+                                                dialogErrorDetailed =
+                                                    AlertDialog.Builder(this@MainActivity)
+                                                        .setViewInCard(text)
+                                                        .setCancelable(true)
+                                                        .create()
+                                                        .apply { show() }
+                                            }
                                         }
                                     }
 
-                                setAction("Retry") {
+                                setAction(getString(R.string.retry)) {
                                     model.retry()
                                 }
                                 show()

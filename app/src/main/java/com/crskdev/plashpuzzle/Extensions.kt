@@ -30,7 +30,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Future
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.roundToInt
 
 /**
@@ -39,6 +41,26 @@ import kotlin.math.roundToInt
 /**
  * Created by Cristian Pela on 26.01.2019.
  */
+
+fun <T> AtomicReference<T>.safeSet(value: T) {
+    var isSet = false
+    while (!isSet) {
+        val prev = get()
+        isSet = compareAndSet(prev, value)
+    }
+}
+
+fun <T> Future<T>.cancelSilent(mayInterruptIftRunning: Boolean) {
+    while (!isCancelled) {
+        try {
+            cancel(mayInterruptIftRunning)
+        } catch (ex: Exception) {
+            val b = true
+            //ignore
+        }
+    }
+
+}
 
 fun String.linkify(): SpannableString = SpannableString(this)
     .apply { Linkify.addLinks(this, Linkify.WEB_URLS) }

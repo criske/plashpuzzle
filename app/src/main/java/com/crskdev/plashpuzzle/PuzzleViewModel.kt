@@ -24,7 +24,9 @@ class PuzzleViewModel(private val repository: ImageRepository,
         private fun randomUri() = "https://picsum.photos/720/1280/?temp=${UUID.randomUUID()}"
     }
 
-    val eventLiveData: LiveData<Event> = LiveEvent()
+    val eventLiveData: LiveData<Event> = LiveEvent<Event>().apply{
+        value = Event.Idle
+    }
 
     val stateLiveData: LiveData<State> = MutableLiveData()
 
@@ -65,9 +67,9 @@ class PuzzleViewModel(private val repository: ImageRepository,
                         }
                         is Intents.LoadFromStore -> repository
                             .fetch(intent.uri)
-                            .catchDisplayable()
                             .map { bitmap -> scaleInitialSource(bitmap) }
                             .map { bitmap -> Action.ImageReady(bitmap, intent.uri) }
+                            .catchDisplayable(Action.Cancel)
                             .flowOn(Dispatchers.IO)
                             .startWith(Action.ImageLoading)
                         is Intents.ImageSave -> {
@@ -121,10 +123,15 @@ class PuzzleViewModel(private val repository: ImageRepository,
         }
     }
 
-    private fun <T> Flow<T>.catchDisplayable() = catch { e ->
-        if (e is PromptableException)
-            (eventLiveData as MutableLiveData).postValue(Event.Error(e))
-        else {
+    private fun <T> Flow<T>.catchDisplayable(resumeValue: T? = null) = catch { e ->
+        if (e is PromptableException) {
+            if(e.cause !is CancellationException){
+                (eventLiveData as MutableLiveData).postValue(Event.Error(e))
+            }
+            resumeValue?.also {
+                emit(it)
+            }
+        } else {
             throw e
         }
     }
@@ -305,10 +312,13 @@ class PuzzleViewModel(private val repository: ImageRepository,
 
     fun intent(intent: Intents) {
         require(eventLiveData is MutableLiveData)
+        eventLiveData.value = Event.Idle
         intentLiveData.value = intent
     }
 
     fun retry() {
+        require(eventLiveData is MutableLiveData)
+        eventLiveData.value = Event.Idle
         intentLiveData.value?.also { prevIntent ->
             intentLiveData.value = prevIntent
         }
@@ -372,6 +382,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
                 val NO_ERROR = Error(null)
             }
         }
+        object Idle: Event()
     }
 
     data class State(

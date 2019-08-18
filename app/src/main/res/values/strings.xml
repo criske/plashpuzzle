@@ -1,18 +1,12 @@
 <resources>
-    <string name="app_name">Plash Puzzle</string>
-    <string name="gdpr">GDPR consent.
-        The application is using a crash reporting tool, Crashlytics, a business division of Google Inc., to send information about bugs and crashes that users experience.
-The Services automatically collect certain information that does not personally identify End Users who access or use mobile applications that use the Services.
-This information includes, but is not limited to, device state information, unique device identifiers, device hardware and OS information,
-information relating to how an application functions, and the physical location of a device at the time of a crash.
-To learn more check out Crashlytics\' privacy policy (http://try.crashlytics.com/terms/)
-    To activate this feature just press OK. You could always deactivate it later from settings.</string>
+    <string name="app_name" translatable="false">Plash Puzzle</string>
+    <string name="gdpr">GDPR consent.         The application is using a crash reporting tool, Crashlytics, a business division of Google Inc., to send information about bugs and crashes that users experience. The Services automatically collect certain information that does not personally identify End Users who access or use mobile applications that use the Services. This information includes, but is not limited to, device state information, unique device identifiers, device hardware and OS information, information relating to how an application functions, and the physical location of a device at the time of a crash. To learn more check out Crashlytics\' privacy policy (http://try.crashlytics.com/terms/)     To activate this feature just press OK. You could always deactivate it later from settings.</string>
     <string name="gdpr_dont_remind_me">Don\'t show me this message again.</string>
     <string name="gdpr_activation_title">Crash Reporting Activation</string>
     <string name="crash_reporting">Crash Reporting</string>
     <string name="activated">Activated</string>
     <string name="deactivated">Deactivated</string>
-    <string name="cancel">Cancel</string>
+    <string name="cancel_lbl">Cancel</string>
     <string name="unknown_error">Unknown Error</string>
     <string name="settings">Settings</string>
     <string name="new_picture">New</string>
@@ -20,4 +14,7 @@ To learn more check out Crashlytics\' privacy policy (http://try.crashlytics.com
     <string name="peek">Peek</string>
     <string name="about">About</string>
     <string name="about_detail">Images from https://unsplash.com/ using https://picsum.photos/ service</string>
+    <string name="warning">Warning</string>
+    <string name="warning_uncompleted_puzzle">This puzzle is not completed. Load new puzzle image?</string>
+    <string name="retry">Retry</string>
 </resources>

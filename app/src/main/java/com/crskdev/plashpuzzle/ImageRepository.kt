@@ -1,33 +1,29 @@
 package com.crskdev.plashpuzzle
 
 import android.content.Context
-import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaScannerConnection
+import android.net.Uri
 import android.os.Environment
-import com.bumptech.glide.load.DataSource
-import com.bumptech.glide.load.engine.DiskCacheStrategy
-import com.bumptech.glide.load.engine.GlideException
-import com.bumptech.glide.request.RequestListener
-import com.bumptech.glide.request.target.SimpleTarget
-import com.bumptech.glide.request.target.Target
-import com.bumptech.glide.request.transition.Transition
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
-import java.io.File
-import java.io.FileOutputStream
-import java.util.concurrent.Future
+import kotlinx.coroutines.withContext
+import java.io.*
+import java.net.HttpURLConnection
+import java.net.HttpURLConnection.*
+import java.net.URL
+import java.security.MessageDigest
 
 
 /**
  * Created by Cristian Pela on 15.07.2019.
  */
-
 interface ImageRepository {
 
     fun fetch(url: String): Flow<Bitmap>
@@ -42,198 +38,205 @@ interface ImageRepository {
 @ExperimentalCoroutinesApi
 class ImageRepositoryImpl(private val context: Context) : ImageRepository {
 
-    private val requestManager = GlideApp.with(context)
-
-    private var futureFetch: Future<Bitmap>? = null
-
-    private val requestBuilder by lazy {
-        requestManager
-            .asBitmap()
-            .diskCacheStrategy(DiskCacheStrategy.NONE)
-            .skipMemoryCache(true)
-    }
+    @Volatile
+    private var fetchJob: Job? = null
 
     override fun fetch(url: String): Flow<Bitmap> = channelFlow {
-        try {
-            futureFetch?.cancel(true)
-        } catch (ex: Exception) {
-            //ignore
-        }
+        val baseUrl = URL(url)
+        val conn = (baseUrl.openConnection() as HttpURLConnection)
         try {
             val cache = File(context.cacheDir, "plashPuzzleCache")
             if (!cache.exists()) {
                 assert(cache.mkdir()) { "Cache folder was not created" }
             }
-            val fileName = url
-                .split("?temp=")
-                .takeIf { it.size == 2 }
-                ?.let { "${it[1]}.jpg" }
-                ?: ""
-            if (fileName.isNotEmpty()) {
-                val file = File(cache, fileName)
-                if(file.exists()){
-                    val bitmap: Bitmap? =
-                        BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply {
-                            inPreferredConfig = Bitmap.Config.ARGB_8888
-                        })
-                    bitmap?.let {
-                        offer(it)
-                    }?: close(PromptableException("Could not load bitmap from file ${file.absolutePath}"))
-                }else {
-                    futureFetch = synchronized(this@ImageRepositoryImpl) {
-                        requestBuilder.load(url).submit()
-                    }
-                    val bitmap = futureFetch!!.get()
-                    //clear cache: it should be one file only
+            val cachFile = File(cache, fileNameHash(url))
+            if (cachFile.exists()) {
+                val bitmap: Bitmap? =
+                    BitmapFactory.decodeFile(cachFile.absolutePath, BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    })
+                bitmap?.let {
+                    offer(it)
+                    close()
+                }
+                    ?: close(PromptableException("Could not load bitmap from file ${cachFile.absolutePath}"))
+            } else {
+                fetchJob = synchronized(this@ImageRepositoryImpl) { Job(coroutineContext[Job]) }
+                val bitmap = withContext(fetchJob!!) {
+                    var bitmap: Bitmap?
+                    var tries = 0
+                    var backOff = 0L
+                    do {
+                        bitmap = openConnection(url).autoConnect {
+                            BufferedInputStream(inputStream, 8192).use { stream ->
+                                BitmapFactory.decodeStream(stream)
+                            }
+                        }
+                        if (bitmap != null)
+                            break
+                        backOff += 500L // linear backoff
+                        delay(backOff)
+                    } while (++tries < 5)
+                    bitmap
+                }
+                //clear cache: it should be one file only
+                if (bitmap == null) {
+                    close(PromptableException("Image not fetched"))
+                } else {
                     cache.listFiles { f -> f.delete() }
-                    file.outputStream().use {
+                    cachFile.outputStream().use {
                         bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)
                     }
                     offer(bitmap)
+                    close()
                 }
-            } else {
-                close(PromptableException("Invalid url $url"))
             }
         } catch (ex: Exception) {
             close(PromptableException(ex))
+        } finally {
+            conn.disconnect()
         }
     }
 
+    private fun fileNameHash(url: String): String =
+        MessageDigest
+            .getInstance("SHA-256")
+            .apply { update(url.toByteArray()) }
+            .digest()
+            .let {
+                buildString {
+                    for (element in it) {
+                        append(Integer.toHexString(0xFF and element.toInt()))
+                    }
+                }
+            }
 
-//    override fun fetch(url: String): Flow<Bitmap> = callbackFlow {
-//
-//        val target = object : SimpleTarget<Bitmap>() {
-//            override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-//                offer(resource)
-//                channel.close()
-//            }
-//        }
-//        requestBuilder
-//            .load(url)
-//            .addListener(object : RequestListener<Bitmap> {
-//                override fun onLoadFailed(e: GlideException?,
-//                                          model: Any?,
-//                                          target: Target<Bitmap>?,
-//                                          isFirstResource: Boolean): Boolean {
-//                    channel.close(PromptableException(e))
-//                    return true
-//                }
-//
-//                override fun onResourceReady(resource: Bitmap?,
-//                                             model: Any?,
-//                                             target: Target<Bitmap>?,
-//                                             dataSource: DataSource?,
-//                                             isFirstResource: Boolean): Boolean = false
-//
-//            })
-//            .into(target)
-//        awaitClose {
-//            requestManager.clear(target)
-//        }
-//    }
-
-    override fun cancelFetch(): Flow<Unit> = flow {
-        futureFetch?.cancel(true)
-        emit(Unit)
+    @Throws(IOException::class)
+    private inline fun openConnection(url: String, settings: HttpURLConnection.() -> Unit = {
+        connectTimeout = 150000
+        readTimeout = 15000
+        // allowUserInteraction = true
+        instanceFollowRedirects = false
+    }): CloseableHttpConnection {
+        var redirectedUrl = url
+        var connection: HttpURLConnection
+        var redirected: Boolean
+        do {
+            connection = (URL(redirectedUrl).openConnection() as HttpURLConnection).apply(settings)
+            val code = connection.responseCode
+            redirected =
+                code == HTTP_MOVED_PERM || code == HTTP_MOVED_TEMP || code == HTTP_SEE_OTHER
+            if (redirected) {
+                val connUrl = connection.url
+                val location = connection.getHeaderField("Location").substring(1)
+                redirectedUrl = Uri.Builder()
+                    .scheme(connUrl.protocol)
+                    .authority(connUrl.authority)
+                    .appendEncodedPath(location).build().toString()
+                connection.disconnect()
+            }
+        } while (redirected)
+        return CloseableHttpConnection(connection)
     }
 
-    override fun save(url: String): Flow<String> = callbackFlow {
-
-        val target = object : SimpleTarget<Bitmap>() {
-            override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
-
-                val gallery = Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_PICTURES
-                ).toString()
-                val appFolder = File(gallery, "PlashPuzzle")
-                if (!appFolder.exists()) {
-                    appFolder.mkdir()
-                }
-                val file = File(appFolder, "plashPuzzle_${System.currentTimeMillis()}.jpg")
-                val outputStream = FileOutputStream(file)
+    override fun save(url: String): Flow<String> = channelFlow {
+        val cache = File(context.cacheDir, "plashPuzzleCache")
+        if (!cache.exists()) {
+            channel.close(PromptableException("Could not save file"))
+        }
+        val cachedFile = File(cache, fileNameHash(url))
+        if (!cachedFile.exists()) {
+            channel.close(PromptableException("Could not save file"))
+        } else {
+            val resource = BitmapFactory.decodeFile(cachedFile.absolutePath)
+            val gallery = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_PICTURES
+            ).toString()
+            val appFolder = File(gallery, "PlashPuzzle")
+            if (!appFolder.exists()) {
+                appFolder.mkdir()
+            }
+            val galleryFile = File(appFolder, "plashPuzzle_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(galleryFile).use {
                 try {
-                    resource.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
+                    resource.compress(Bitmap.CompressFormat.JPEG, 90, it)
                     MediaScannerConnection.scanFile(
                         context,
-                        arrayOf(file.toString()),
+                        arrayOf(galleryFile.absolutePath),
                         arrayOf("image/jpeg")
                     ) { _, uri ->
-                        channel.offer(uri.toString())
-                        channel.close()
+                        uri?.also {
+                            channel.offer(uri.toString())
+                            channel.close()
+                        } ?: channel.close(NullPointerException("Uri saved to gallery is Null"))
                     }
                 } catch (e: Exception) {
-                    channel.close(e)
-                } finally {
-                    outputStream.close()
-                }
-            }
-        }
-
-        requestBuilder
-            .load(url)
-            .addListener(object : RequestListener<Bitmap> {
-                override fun onLoadFailed(e: GlideException?,
-                                          model: Any?,
-                                          target: Target<Bitmap>?,
-                                          isFirstResource: Boolean): Boolean {
                     channel.close(PromptableException(e))
-                    return true
                 }
-
-                override fun onResourceReady(resource: Bitmap?,
-                                             model: Any?,
-                                             target: Target<Bitmap>?,
-                                             dataSource: DataSource?,
-                                             isFirstResource: Boolean): Boolean = false
-
-            })
-            .into(target)
-        awaitClose { requestManager.clear(target) }
-    }
-
-}
-
-
-private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
-    // Raw height and width of image
-    val (height: Int, width: Int) = options.run { outHeight to outWidth }
-    var inSampleSize = 1
-    if (height > reqHeight || width > reqWidth) {
-        val halfHeight: Int = height / 2
-        val halfWidth: Int = width / 2
-        // Calculate the largest inSampleSize value that is a power of 2 and keeps both
-        // height and width larger than the requested height and width.
-        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-            inSampleSize *= 2
+            }
         }
+        awaitClose()
     }
-    return inSampleSize
-}
 
-private fun decodeBitmap(
-    assets: AssetManager,
-    location: String,
-    reqWidth: Int,
-    reqHeight: Int
-): Bitmap? {
-    // First decode with inJustDecodeBounds=true to check dimensions
-    return BitmapFactory.Options().run {
-        inJustDecodeBounds = true
-        assets
-            .open(location).use {
-                BitmapFactory.decodeStream(it, null, this)
-            }
-
-        // Calculate inSampleSize
-        inSampleSize = calculateInSampleSize(this, reqWidth, reqHeight)
-
-        // Decode pieceInfo with inSampleSize set
-        inJustDecodeBounds = false
-
-        assets
-            .open(location).use {
-                BitmapFactory.decodeStream(it, null, this)
-            }
+    override fun cancelFetch(): Flow<Unit> = flow {
+        fetchJob?.cancel()
+        emit(Unit)
     }
 }
+
+
+//private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+//    // Raw height and width of image
+//    val (height: Int, width: Int) = options.run { outHeight to outWidth }
+//    var inSampleSize = 1
+//    if (height > reqHeight || width > reqWidth) {
+//        val halfHeight: Int = height / 2
+//        val halfWidth: Int = width / 2
+//        // Calculate the largest inSampleSize value that is a power of 2 and keeps both
+//        // height and width larger than the requested height and width.
+//        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+//            inSampleSize *= 2
+//        }
+//    }
+//    return inSampleSize
+//}
+//
+//private fun decodeBitmap(
+//    assets: AssetManager,
+//    location: String,
+//    reqWidth: Int,
+//    reqHeight: Int
+//): Bitmap? {
+//    // First decode with inJustDecodeBounds=true to check dimensions
+//    return BitmapFactory.Options().run {
+//        inJustDecodeBounds = true
+//        assets
+//            .open(location).use {
+//                BitmapFactory.decodeStream(it, null, this)
+//            }
+//
+//        // Calculate inSampleSize
+//        inSampleSize = calculateInSampleSize(this, reqWidth, reqHeight)
+//
+//        // Decode pieceInfo with inSampleSize set
+//        inJustDecodeBounds = false
+//
+//        assets
+//            .open(location).use {
+//                BitmapFactory.decodeStream(it, null, this)
+//            }
+//    }
+//}
+
+
+class CloseableHttpConnection(val connection: HttpURLConnection) : Closeable {
+    override fun close() {
+        connection.disconnect()
+    }
+}
+
+inline fun <T> CloseableHttpConnection.autoConnect(block: HttpURLConnection.() -> T): T =
+    use { block(it.connection) }
+
+
 

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="about">Despre</string>
+    <string name="activated">Activat</string>
+    <string name="cancel_lbl">Anuleaza</string>
+    <string name="crash_reporting">Raport de Crash</string>
+    <string name="deactivated">Dezactivat</string>
+    <string name="gdpr_activation_title">Activare Raport de Crash</string>
+    <string name="gdpr_dont_remind_me">Nu imi arata acest mesaj din nou</string>
+    <string name="hint">Indiciu</string>
+    <string name="new_picture">Nou</string>
+    <string name="peek">Uita-te</string>
+    <string name="retry">Reincearca</string>
+    <string name="settings">Setari</string>
+    <string name="unknown_error">Eroare Necunoscuta</string>
+    <string name="warning">Avertisment</string>
+    <string name="warning_uncompleted_puzzle">Puzzle-ul nu este complet. Incarc un nou puzzle?</string>
+    <string name="gdpr">Consimțământ GDPR. Aplicația utilizează un instrument de raportare a accidentelor, Crashlytics, o divizie de afaceri a Google Inc., pentru a trimite informații despre bug-uri și blocaje pe care utilizatorii le întâmpină. Serviciile colectează automat anumite informații care nu identifică personal Utilizatorii finali care accesează sau utilizează aplicații mobile care utilizează Serviciile. Aceste informații includ, dar nu se limitează la, informații despre starea dispozitivului, identificatori de dispozitiv unici, hardware-ul dispozitivului și informații despre sistemul de operare, informații referitoare la modul în care funcționează o aplicație și locația fizică a unui dispozitiv în momentul unui accident. Pentru a afla mai multe, consultați politica de confidențialitate a Crashlytics (http://try.crashlytics.com/terms/) Pentru a activa această caracteristică trebuie doar să apăsați OK. Puteți să-l dezactivați întotdeauna mai târziu de setări.</string>
+    <string name="about_detail">Imagini de p https://unsplash.com/ folosind serviciul https://picsum.photos/</string>
+</resources>
