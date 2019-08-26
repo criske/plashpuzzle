@@ -60,7 +60,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
                                             .fetch(uri)
                                             .catchDisplayable()
                                             .map { bitmap -> scaleInitialSource(bitmap) }
-                                            .map { bitmap -> Action.StoredState(bitmap, ss) }
+                                            .map { bitmap -> Action.StoredState(bitmap, ss.copy(uri = uri)) }
                                             .startWith(Action.ImageLoading)
                                     }
                             ).flowOn(Dispatchers.IO)
@@ -327,18 +327,15 @@ class PuzzleViewModel(private val repository: ImageRepository,
     fun save() {
         val state = stateLiveData.value?.copy()
         if (state != null)
-            GlobalScope.launch {
-                withContext(Dispatchers.Default) {
-                    puzzleStateLoader.save(
+            GlobalScope.launch(Dispatchers.Default) {
+                puzzleStateLoader.save(
                         PuzzleStateLoader.StoredState(
                             state.uri,
                             state.uriLocal,
                             state.isCompleted,
                             state.grid.map { it.index },
                             state.scaleFactor
-                        )
-                    )
-                }
+                        ))
             }
 
     }

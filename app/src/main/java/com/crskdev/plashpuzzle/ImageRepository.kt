@@ -87,7 +87,7 @@ class ImageRepositoryImpl(private val context: Context) : ImageRepository {
                     cachFile.outputStream().use {
                         bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)
                     }
-                    offer(bitmap)
+                    offer(bitmap!!)
                     close()
                 }
             }
