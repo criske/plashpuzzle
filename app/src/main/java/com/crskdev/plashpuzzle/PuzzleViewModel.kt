@@ -21,10 +21,10 @@ class PuzzleViewModel(private val repository: ImageRepository,
         const val GRID_SIZE = 4
         const val GRID_LEN = GRID_SIZE * GRID_SIZE
         val EMPTY_BITMAP: Bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-        private fun randomUri() = "https://picsum.photos/720/1280/?temp=${UUID.randomUUID()}"
+        private fun randomUri() = "https://picsum.photos/720/1280?temp=${UUID.randomUUID()}"
     }
 
-    val eventLiveData: LiveData<Event> = LiveEvent<Event>().apply{
+    val eventLiveData: LiveData<Event> = LiveEvent<Event>().apply {
         value = Event.Idle
     }
 
@@ -60,7 +60,12 @@ class PuzzleViewModel(private val repository: ImageRepository,
                                             .fetch(uri)
                                             .catchDisplayable()
                                             .map { bitmap -> scaleInitialSource(bitmap) }
-                                            .map { bitmap -> Action.StoredState(bitmap, ss.copy(uri = uri)) }
+                                            .map { bitmap ->
+                                                Action.StoredState(
+                                                    bitmap,
+                                                    ss.copy(uri = uri)
+                                                )
+                                            }
                                             .startWith(Action.ImageLoading)
                                     }
                             ).flowOn(Dispatchers.IO)
@@ -94,18 +99,24 @@ class PuzzleViewModel(private val repository: ImageRepository,
                             )
                         )
                         is Intents.Cancel -> repository.cancelFetch().map { Action.Cancel }
+                        is Intents.Error -> flowOf(Action.Error)
                         else -> flowOf(Action.None)
                     }
                 }
                 .scan(State()) { state, action ->
                     when (action) {
-                        Action.ImageLoading -> state.copy(isLoading = true, isSourceChanged = false)
-                        Action.Cancel -> state.copy(isLoading = false, isSourceChanged = false)
+                        Action.ImageLoading -> state.copy(
+                            isLoading = true,
+                            isSourceChanged = false,
+                            hasError = false
+                        )
+                        Action.Cancel -> state.copy(
+                            isLoading = false,
+                            isSourceChanged = false,
+                            hasError = false
+                        )
                         is Action.ImageReady -> withContext(Dispatchers.Default) {
-                            ready(
-                                state,
-                                action
-                            )
+                            ready(state, action)
                         }
                         is Action.ImageSaved -> saved(state, action)
                         is Action.StoredState -> withContext(Dispatchers.Default) {
@@ -114,6 +125,10 @@ class PuzzleViewModel(private val repository: ImageRepository,
                         is Action.Scale -> withContext(Dispatchers.Default) { scale(state, action) }
                         is Action.Swap -> withContext(Dispatchers.Default) { swap(state, action) }
                         is Action.GDPRStatus -> gdprStatus(state, action)
+                        is Action.Error -> state.copy(
+                            isLoading = false,
+                            hasError = true
+                        )
                         else -> state
                     }
                 }
@@ -125,8 +140,9 @@ class PuzzleViewModel(private val repository: ImageRepository,
 
     private fun <T> Flow<T>.catchDisplayable(resumeValue: T? = null) = catch { e ->
         if (e is PromptableException) {
-            if(e.cause !is CancellationException){
+            if (e.cause !is CancellationException) {
                 (eventLiveData as MutableLiveData).postValue(Event.Error(e))
+                intentLiveData.postValue(Intents.Error)
             }
             resumeValue?.also {
                 emit(it)
@@ -137,7 +153,10 @@ class PuzzleViewModel(private val repository: ImageRepository,
     }
 
     private fun gdprStatus(state: State, action: Action.GDPRStatus): State =
-        state.copy(gdprState = State.GDPRState(action.isEnabled, action.dontRemindMe))
+        state.copy(
+            gdprState = State.GDPRState(action.isEnabled, action.dontRemindMe),
+            isLoading = false
+        )
 
     private fun saved(state: State, action: Action.ImageSaved): State =
         state.copy(isLoading = false, uriLocal = action.localUri)
@@ -244,6 +263,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
             isCompleted = false,
             isSourceChanged = true,
             grid = grid,
+            hasError = false,
             scaleFactor = state.scaleFactor
         )
     }
@@ -312,16 +332,15 @@ class PuzzleViewModel(private val repository: ImageRepository,
 
     fun intent(intent: Intents) {
         require(eventLiveData is MutableLiveData)
-        eventLiveData.value = Event.Idle
+        if (intent !is Intents.GDPRSave)
+            eventLiveData.value = Event.Idle
         intentLiveData.value = intent
     }
 
     fun retry() {
         require(eventLiveData is MutableLiveData)
         eventLiveData.value = Event.Idle
-        intentLiveData.value?.also { prevIntent ->
-            intentLiveData.value = prevIntent
-        }
+        intentLiveData.value = Intents.LoadFromStore.random()
     }
 
     fun save() {
@@ -329,13 +348,14 @@ class PuzzleViewModel(private val repository: ImageRepository,
         if (state != null)
             GlobalScope.launch(Dispatchers.Default) {
                 puzzleStateLoader.save(
-                        PuzzleStateLoader.StoredState(
-                            state.uri,
-                            state.uriLocal,
-                            state.isCompleted,
-                            state.grid.map { it.index },
-                            state.scaleFactor
-                        ))
+                    PuzzleStateLoader.StoredState(
+                        state.uri,
+                        state.uriLocal,
+                        state.isCompleted,
+                        state.grid.map { it.index },
+                        state.scaleFactor
+                    )
+                )
             }
 
     }
@@ -347,6 +367,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
 
         object Cancel : Action()
         object None : Action()
+        object Error : Action()
 
         class GDPRStatus(val isEnabled: Boolean, val dontRemindMe: Boolean) : Action()
         class StoredState(val bitmap: Bitmap, val puzzleState: PuzzleStateLoader.StoredState) :
@@ -360,6 +381,7 @@ class PuzzleViewModel(private val repository: ImageRepository,
     sealed class Intents {
         object Cancel : Intents()
         object Init : Intents()
+        object Error : Intents()
         class GDPRSave(val enable: Boolean, val dontRemindMe: Boolean) : Intents()
         class ImageSave(val uri: String) : Intents()
         class LoadFromStore(val uri: String) : Intents() {
@@ -379,7 +401,8 @@ class PuzzleViewModel(private val repository: ImageRepository,
                 val NO_ERROR = Error(null)
             }
         }
-        object Idle: Event()
+
+        object Idle : Event()
     }
 
     data class State(
@@ -395,6 +418,8 @@ class PuzzleViewModel(private val repository: ImageRepository,
         val isSourceChanged: Boolean = false,
         val scaleFactor: Float = 0.0f,
         val grid: List<PuzzlePieceInfo> = emptyList(),
+
+        val hasError: Boolean = false,
 
         val gdprState: GDPRState = GDPRState()) {
 

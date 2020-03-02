@@ -45,21 +45,21 @@ class ImageRepositoryImpl(private val context: Context) : ImageRepository {
         val baseUrl = URL(url)
         val conn = (baseUrl.openConnection() as HttpURLConnection)
         try {
-            val cache = File(context.cacheDir, "plashPuzzleCache")
+            val cache = File(context.filesDir, "plashPuzzleCache")
             if (!cache.exists()) {
                 assert(cache.mkdir()) { "Cache folder was not created" }
             }
-            val cachFile = File(cache, fileNameHash(url))
-            if (cachFile.exists()) {
+            val cacheFile = File(cache, fileNameHash(url))
+            if (cacheFile.exists()) {
                 val bitmap: Bitmap? =
-                    BitmapFactory.decodeFile(cachFile.absolutePath, BitmapFactory.Options().apply {
+                    BitmapFactory.decodeFile(cacheFile.absolutePath, BitmapFactory.Options().apply {
                         inPreferredConfig = Bitmap.Config.ARGB_8888
                     })
                 bitmap?.let {
                     offer(it)
                     close()
                 }
-                    ?: close(PromptableException("Could not load bitmap from file ${cachFile.absolutePath}"))
+                    ?: close(PromptableException("Could not load bitmap from file ${cacheFile.absolutePath}"))
             } else {
                 fetchJob = synchronized(this@ImageRepositoryImpl) { Job(coroutineContext[Job]) }
                 val bitmap = withContext(fetchJob!!) {
@@ -84,7 +84,7 @@ class ImageRepositoryImpl(private val context: Context) : ImageRepository {
                     close(PromptableException("Image not fetched"))
                 } else {
                     cache.listFiles { f -> f.delete() }
-                    cachFile.outputStream().use {
+                    cacheFile.outputStream().use {
                         bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)
                     }
                     offer(bitmap!!)
@@ -127,12 +127,7 @@ class ImageRepositoryImpl(private val context: Context) : ImageRepository {
             redirected =
                 code == HTTP_MOVED_PERM || code == HTTP_MOVED_TEMP || code == HTTP_SEE_OTHER
             if (redirected) {
-                val connUrl = connection.url
-                val location = connection.getHeaderField("Location").substring(1)
-                redirectedUrl = Uri.Builder()
-                    .scheme(connUrl.protocol)
-                    .authority(connUrl.authority)
-                    .appendEncodedPath(location).build().toString()
+                redirectedUrl =connection.getHeaderField("Location")
                 connection.disconnect()
             }
         } while (redirected)

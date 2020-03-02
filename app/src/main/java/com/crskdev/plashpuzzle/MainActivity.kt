@@ -81,7 +81,11 @@ class MainActivity : AppCompatActivity() {
                 .findItem(R.id.action_hint)
                 ?.actionView = ImageButton(context).apply {
                 setImageResource(R.drawable.ic_help_black_24dp)
-                setBackgroundResource(context.attributeRes(android.R.attr.selectableItemBackgroundBorderless))
+                setBackgroundResource(
+                    context.attributeRes(
+                        android.R.attr.selectableItemBackgroundBorderless
+                    )
+                )
                 setOnTouchListener { _, event ->
                     when (event.action) {
                         MotionEvent.ACTION_DOWN -> {
@@ -132,7 +136,11 @@ class MainActivity : AppCompatActivity() {
                         true
                     }
                     R.id.action_about -> {
-                        AlertDialog.Builder(this@MainActivity.asThemeContext(R.style.AppDialogTheme))
+                        AlertDialog.Builder(
+                                this@MainActivity.asThemeContext(
+                                    R.style.AppDialogTheme
+                                )
+                            )
                             .setTitle(R.string.about)
                             .setMessageLinkifyed(this@MainActivity, R.string.about_detail)
                             .setPositiveButton("OK") { d, _ -> d.dismiss() }
@@ -184,8 +192,14 @@ class MainActivity : AppCompatActivity() {
                         true
                     }
                     R.id.action_new -> {
-                        if(model.stateLiveData.value?.isCompleted == false) {
-                            AlertDialog.Builder(this@MainActivity.asThemeContext(R.style.AppDialogTheme))
+                        if (model.stateLiveData.value?.isCompleted == false &&
+                            model.stateLiveData.value?.hasError == false
+                        ) {
+                            AlertDialog.Builder(
+                                    this@MainActivity.asThemeContext(
+                                        R.style.AppDialogTheme
+                                    )
+                                )
                                 .setTitle(context.getString(R.string.warning))
                                 .setMessage(context.getString(R.string.warning_uncompleted_puzzle))
                                 .setPositiveButton("OK") { d, _ ->
@@ -197,7 +211,7 @@ class MainActivity : AppCompatActivity() {
                                 }
                                 .setCancelable(true)
                                 .apply { show() }
-                        }else{
+                        } else {
                             model.intent(PuzzleViewModel.Intents.LoadFromStore.random())
                         }
                         true
@@ -209,10 +223,15 @@ class MainActivity : AppCompatActivity() {
 
 
         model.stateLiveData.observe(this, Observer { state ->
-            buttonsVisibility(!state.isLoading)
+            if (state.hasError)
+                buttonsVisibility(false, R.id.action_new)
+            else
+                buttonsVisibility(!state.isLoading)
             progressLoading.isVisible = state.isLoading
             if (state.isSourceChanged || gridLayout.childCount == 0) {
-                if (!state.source.isRecycled) // or else app will crash from palette; [see Palette.java line 618]
+                if (!state.source
+                        .isRecycled
+                ) // or else app will crash from palette; [see Palette.java line 618]
                     Palette.from(state.source).generate { p ->
                         palette = p
                         p?.run {
@@ -304,7 +323,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             btnDownload.isVisible =
-                !state.isLoading && state.isCompleted && state.uriLocal.isEmpty()
+                !state.isLoading && state.isCompleted && state.uriLocal.isEmpty() && !state.hasError
 
             if (state.isCompleted) {
                 gridLayout.forEach { view ->
@@ -337,7 +356,8 @@ class MainActivity : AppCompatActivity() {
                                     model.intent(
                                         PuzzleViewModel.Intents.GDPRSave(
                                             enable = true,
-                                            dontRemindMe = gdprMessageView.checkDontRemindMe.isChecked
+                                            dontRemindMe = gdprMessageView.checkDontRemindMe
+                                                .isChecked
                                         )
                                     )
                                     d.dismiss()
@@ -346,7 +366,8 @@ class MainActivity : AppCompatActivity() {
                                     model.intent(
                                         PuzzleViewModel.Intents.GDPRSave(
                                             enable = false,
-                                            dontRemindMe = gdprMessageView.checkDontRemindMe.isChecked
+                                            dontRemindMe = gdprMessageView.checkDontRemindMe
+                                                .isChecked
                                         )
                                     )
                                     d.dismiss()
@@ -359,7 +380,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 is PuzzleViewModel.Event.Error -> {
-                    buttonsVisibility(true)
+                    buttonsVisibility(false, R.id.action_new)
                     progressLoading.isVisible = false
                     if (event == PuzzleViewModel.Event.Error.NO_ERROR) {
                         snackbarError?.dismiss()
@@ -370,7 +391,9 @@ class MainActivity : AppCompatActivity() {
                         snackbarError = Snackbar
                             .make(container, message, Snackbar.LENGTH_INDEFINITE)
                             .apply {
-                                view.findViewById<TextView>(com.google.android.material.R.id.snackbar_text)
+                                view.findViewById<TextView>(
+                                    com.google.android.material.R.id.snackbar_text
+                                )
                                     .apply {
                                         maxLines = 5
                                         setOnClickListener {
@@ -381,7 +404,8 @@ class MainActivity : AppCompatActivity() {
                                                             height = 300.dp(resources)
                                                             width = 150.dp(resources)
                                                             text = stackTrace
-                                                            movementMethod = ScrollingMovementMethod()
+                                                            movementMethod =
+                                                                ScrollingMovementMethod()
                                                             setOnLongClickListener {
                                                                 dialogErrorDetailed?.dismiss()
                                                                 true
